@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calculadora HH | Multprest</title>
+  <meta name="description" content="Calculadora de custo e formação do valor-hora da Multprest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <img class="brand-logo" src="https://dtvoeevhaseb5.cloudfront.net/uploads/mocha-import/63a2001d-676d-47d6-a98d-4e0843dd6483/740dd49d-617b-4e52-943b-d4e595105ea8.png" alt="Multprest" />
+        <div>
+          <h1>Calculadora HH</h1>
+          <p>Custo de Funcionário</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" id="btnExportTxt">Exportar TXT</button>
+        <button class="btn btn-outline" id="btnExportCsv">Exportar CSV</button>
+        <button class="btn btn-primary" id="btnReset">Resetar</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main">
+    <nav class="tabs" aria-label="Abas principais">
+      <button class="tab active" data-tab="calculadora">Calculadora</button>
+      <button class="tab" data-tab="tabela">Tabela de Valores</button>
+      <button class="tab" data-tab="custofixo">Custo Fixo</button>
+    </nav>
+
+    <section id="tab-calculadora" class="tab-panel active">
+      <div class="cargo-head">
+        <div><strong>Cargo:</strong> <button id="limparCargo" class="link-btn">Limpar seleção</button></div>
+        <div class="cargo-buttons" id="cargoButtons"></div>
+        <p class="hint">O salário do cargo é salário-base. A insalubridade é calculada separadamente sobre o salário mínimo.</p>
+      </div>
+
+      <div class="grid-3">
+        <div class="stack">
+          <section class="card">
+            <h2>Informações Básicas</h2>
+            <div class="fields">
+              <label>Salário Base <div class="input-wrap"><span>R$</span><input id="salario" type="number" step="0.01"></div></label>
+              <label>Jornada Mensal <div class="input-wrap"><input id="jornada" type="number"><span>hrs</span></div></label>
+              <label>Salário Mínimo (referência) <div class="input-wrap"><span>R$</span><input id="salarioMinimo" type="number" step="0.01"></div></label>
+            </div>
+          </section>
+
+          <section class="card">
+            <h2>Benefícios</h2>
+            <div class="fields grid-2-fields">
+              <label>Prêmio Assiduidade <div class="input-wrap"><span>R$</span><input id="premioAssiduidade" type="number" step="0.01"></div></label>
+              <label>Insalubridade <div class="input-wrap"><input id="insalubridadePerc" type="number" step="0.01"><span>%</span></div></label>
+            </div>
+            <p class="hint">Prêmio tratado como verba sem incidência de encargos, conforme configuração atual.</p>
+          </section>
+
+          <section class="card">
+            <h2>Custos Fixos Individuais</h2>
+            <div class="fields grid-2-fields">
+              <label>Almoço <div class="input-wrap"><span>R$</span><input id="almoco" type="number" step="0.01"></div></label>
+              <label>EPI / Uniformes (mês) <div class="input-wrap"><span>R$</span><input id="epiMensal" type="number" step="0.01"></div></label>
+              <label>Transporte <div class="input-wrap"><span>R$</span><input id="transporte" type="number" step="0.01"></div></label>
+              <label>Exames (mês) <div class="input-wrap"><span>R$</span><input id="examesMensal" type="number" step="0.01"></div></label>
+            </div>
+            <label>Depreciação / Ferramentas <div class="input-wrap"><span>R$</span><input id="ferramentas" type="number" step="0.01"></div></label>
+            <label>Plano de Saúde <div class="input-wrap"><span>R$</span><input id="planoSaude" type="number" step="0.01"></div></label>
+            <label>Treinamentos NR (anual) <div class="input-wrap"><span>R$</span><input id="treinamentosAnual" type="number" step="0.01"></div></label>
+            <p class="hint">EPI/uniforme parte de R$ 448,50 amortizados em 12 meses. Exames: R$ 339/ano. Treinamentos editáveis.</p>
+          </section>
+
+          <section class="card">
+            <h2>Seguro de Vida</h2>
+            <label>Valor Total Mensal dos Seguros <div class="input-wrap"><span>R$</span><input id="seguroVidaTotal" type="number" step="0.01"></div></label>
+            <p class="hint" id="seguroRateio"></p>
+          </section>
+        </div>
+
+        <div class="stack">
+          <section class="card">
+            <h2>Custos Operacionais</h2>
+            <label>Custo Operacional Total <div class="input-wrap readonly"><span>R$</span><input id="custoOperacional" type="number" step="0.01" readonly></div></label>
+            <label>Quantidade de Funcionários <div class="input-wrap"><input id="qtdFunc" type="number" min="1"></div></label>
+            <p class="hint">O custo operacional vem automaticamente da aba Custo Fixo.</p>
+          </section>
+
+          <section class="card">
+            <h2>Encargos e Impostos</h2>
+            <div class="fields grid-2-fields">
+              <label>INSS Patronal + RAT/FAP <div class="input-wrap"><input id="inssPatronalPerc" type="number" step="0.0001"><span>%</span></div></label>
+              <label>FGTS <div class="input-wrap"><input id="fgtsPerc" type="number" step="0.01"><span>%</span></div></label>
+              <label>DAS Efetivo Anexo IV <div class="input-wrap"><input id="simplesPerc" type="number" step="0.01"><span>%</span></div></label>
+              <label>ISS Retido <div class="input-wrap"><input id="issRetidoPerc" type="number" step="0.01"><span>%</span></div></label>
+              <label>INSS Retido <div class="input-wrap"><input id="inssRetidoPerc" type="number" step="0.01"><span>%</span></div></label>
+            </div>
+            <p class="hint">ISS e INSS retidos afetam o caixa/recebível; não são somados novamente ao DAS como custo adicional.</p>
+          </section>
+
+          <section class="card">
+            <h2>Markup e Antecipação</h2>
+            <div class="fields grid-2-fields">
+              <label>Markup sobre Custo <div class="input-wrap"><input id="lucroPerc" type="number" step="0.01"><span>%</span></div></label>
+              <label>Taxa Antecipação / dia <div class="input-wrap"><input id="taxaAntecipacaoDia" type="number" step="0.001"><span>%</span></div></label>
+              <label>Dias para Recebimento <div class="input-wrap"><input id="diasAntecipacao" type="number"><span>dias</span></div></label>
+              <label>Margem de Negociação <div class="input-wrap"><input id="descontoNegociacaoPerc" type="number" step="0.01"><span>%</span></div></label>
+            </div>
+            <label>Cliente
+              <select id="clientePreset"></select>
+            </label>
+          </section>
+        </div>
+
+        <div class="stack">
+          <section class="card result-card">
+            <h2>Encargos Trabalhistas</h2>
+            <div id="encargosResultados" class="results"></div>
+          </section>
+          <section class="card result-card">
+            <h2>Custos Adicionais</h2>
+            <div id="custosResultados" class="results"></div>
+          </section>
+          <section class="card result-card highlight-card">
+            <h2>Resultado Final</h2>
+            <div id="resultadoFinal" class="results"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="hour-summary">
+        <section class="card hour-detail">
+          <h2>Composição por Hora (<span id="jornadaLabel">220</span>h/mês)</h2>
+          <div id="composicaoHora" class="hour-grid"></div>
+        </section>
+        <section class="value-hour">
+          <span>Valor Hora p/ Orçamento</span>
+          <strong id="valorHoraOferta">R$ 0,00</strong>
+          <small id="valorHoraBaseInfo">Base sem negociação: R$ 0,00</small>
+        </section>
+      </div>
+
+      <section class="card proof-card">
+        <h2>Prova Real – O Que Sobra Após a NF</h2>
+        <div id="provaReal" class="proof-grid"></div>
+      </section>
+    </section>
+
+    <section id="tab-tabela" class="tab-panel">
+      <section class="card">
+        <div class="table-title-row">
+          <div><h2>Tabela de Valores por Cliente</h2><p class="hint">Calculada com os mesmos parâmetros da aba Calculadora.</p></div>
+        </div>
+        <div class="table-wrap"><table id="tabelaValores"><thead></thead><tbody></tbody></table></div>
+      </section>
+    </section>
+
+    <section id="tab-custofixo" class="tab-panel">
+      <div class="cost-actions">
+        <button class="btn btn-outline" id="addCusto">Adicionar Item</button>
+        <button class="btn btn-outline" id="resetCustos">Resetar</button>
+      </div>
+      <section class="card">
+        <h2>Itens de Custo Fixo</h2>
+        <div class="cost-head"><span>Descrição</span><span>Valor (R$)</span><span></span></div>
+        <div id="listaCustos"></div>
+      </section>
+      <div class="totals-grid">
+        <section class="card total-card"><h2>Total Custo Fixo</h2><strong id="totalCustoFixo">R$ 0,00</strong><span>Soma de todos os itens</span></section>
+        <section class="card total-card green"><h2>Custo por Funcionário</h2><strong id="custoPorFuncionario">R$ 0,00</strong><span id="custoPorFuncLegenda">Total ÷ 6 funcionários</span></section>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
