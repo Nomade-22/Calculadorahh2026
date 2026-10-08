@@ -1,6 +1,7 @@
 const brl = v => (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct = v => `${(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4})}%`;
 const clone = o => JSON.parse(JSON.stringify(o));
+const clamp = (v,min,max) => Math.min(max,Math.max(min,Number(v)||0));
 
 const cargos = [
   {id:'mecanico-caldeireiro',nome:'Mecânico Caldeireiro',salario:2703.26},
@@ -80,26 +81,43 @@ function calc(d=dados){
   const treinamentoMes=d.treinamentosAnual/12;
   const custoTotal=baseEncargos+d.premioAssiduidade+encargosTotais+custosInd+custoOperFunc+seguroFunc+treinamentoMes;
   const custoComMarkup=custoTotal*(1+d.lucroPerc/100);
-  const dasRate=d.simplesPerc/100;
-  const inssRetRate=d.inssRetidoPerc/100;
-  const issRetRate=d.issRetidoPerc/100;
-  const retencoesRate=Math.min(.95,inssRetRate+issRetRate);
+  // ORDEM FISCAL/FINANCEIRA:
+  // 1) o DAS efetivo é a carga econômica total do Simples para a receita;
+  // 2) se houver ISS retido, essa parcela sai do DAS a recolher e é retida pelo tomador;
+  // 3) INSS retido é crédito/compensação previdenciária, não custo definitivo;
+  // 4) a antecipação incide somente sobre o recebível líquido das retenções.
+  const dasRate=clamp(d.simplesPerc/100,0,.95);
+  const issRetRate=clamp(d.issRetidoPerc/100,0,dasRate);
+  const inssRetRate=clamp(d.inssRetidoPerc/100,0,Math.max(0,.95-issRetRate));
+  const retencoesRate=issRetRate+inssRetRate;
   const recebivelFrac=Math.max(0,1-retencoesRate);
-  const antRate=d.diasAntecipacao>0?(d.diasAntecipacao*d.taxaAntecipacaoDia/100):0;
+  const antRate=Math.max(0,d.diasAntecipacao)*Math.max(0,d.taxaAntecipacaoDia)/100;
   const antEfetivaSobreNF=antRate*recebivelFrac;
   const divisor=Math.max(.01,1-dasRate-antEfetivaSobreNF);
   const precoBase=custoComMarkup/divisor;
   const valorHoraBase=precoBase/d.jornada;
-  const precoOferta=d.descontoNegociacaoPerc>0?precoBase/(1-d.descontoNegociacaoPerc/100):precoBase;
+  const negociacaoRate=clamp(d.descontoNegociacaoPerc/100,0,.95);
+  const precoOferta=negociacaoRate>0?precoBase/(1-negociacaoRate):precoBase;
   const valorHoraOferta=precoOferta/d.jornada;
+
   const issRetido=precoBase*issRetRate;
   const inssRetido=precoBase*inssRetRate;
   const recebivelLiquido=precoBase-issRetido-inssRetido;
   const custoAntecipacao=recebivelLiquido*antRate;
-  const dasEconomico=precoBase*dasRate;
-  const resultadoEconomico=precoBase-dasEconomico-custoAntecipacao-custoTotal;
+
+  // Quando o ISS é retido corretamente no Simples, não é recolhido novamente no DAS.
+  // Logo: carga total do Simples = DAS a recolher + ISS retido.
+  const dasRecolherRate=Math.max(0,dasRate-issRetRate);
+  const dasRecolher=precoBase*dasRecolherRate;
+  const cargaSimplesTotal=precoBase*dasRate;
+  const caixaAposTributosEFinanceiro=recebivelLiquido-dasRecolher-custoAntecipacao;
+
+  // O resultado econômico parte da NF bruta. O INSS retido não é despesa:
+  // ele liquida/compensa obrigação previdenciária já contemplada no custo de pessoal.
+  const resultadoEconomico=precoBase-cargaSimplesTotal-custoAntecipacao-custoTotal;
   const resultadoPerc=custoTotal?resultadoEconomico/custoTotal*100:0;
-  return {insalubridade,baseEncargos,ferias,terco,feriasComTerco,decimo,fgtsBase,fgtsFerias,fgts13,fgtsTotal,inssBase,inssFerias,inss13,inssPatronal,provisaoRescisao,encargosTotais,custosInd,custoFixo,custoOperFunc,seguroFunc,treinamentoMes,custoTotal,custoHora:custoTotal/d.jornada,custoComMarkup,precoBase,valorHoraBase,precoOferta,valorHoraOferta,issRetido,inssRetido,recebivelLiquido,custoAntecipacao,dasEconomico,resultadoEconomico,resultadoPerc,antRate,recebivelFrac};
+  const margemVenda=precoBase?resultadoEconomico/precoBase*100:0;
+  return {insalubridade,baseEncargos,ferias,terco,feriasComTerco,decimo,fgtsBase,fgtsFerias,fgts13,fgtsTotal,inssBase,inssFerias,inss13,inssPatronal,provisaoRescisao,encargosTotais,custosInd,custoFixo,custoOperFunc,seguroFunc,treinamentoMes,custoTotal,custoHora:custoTotal/d.jornada,custoComMarkup,precoBase,valorHoraBase,precoOferta,valorHoraOferta,issRetido,inssRetido,recebivelLiquido,custoAntecipacao,dasRecolher,cargaSimplesTotal,caixaAposTributosEFinanceiro,resultadoEconomico,resultadoPerc,margemVenda,antRate,recebivelFrac};
 }
 
 function row(label,value,cls=''){return `<div class="result-row ${cls}"><span>${label}</span><strong>${typeof value==='number'?brl(value):value}</strong></div>`}
@@ -119,12 +137,12 @@ function render(){
     row('Base de Encargos',r.baseEncargos,'emphasis'),row('Férias (1/12)',r.ferias),row('1/3 Constitucional',r.terco),row('Férias + 1/3',r.feriasComTerco,'emphasis'),row('13º Salário',r.decimo),row(`FGTS Base (${pct(dados.fgtsPerc)})`,r.fgtsBase),row('FGTS Férias',r.fgtsFerias),row('FGTS 13º',r.fgts13),row('FGTS Total',r.fgtsTotal,'emphasis'),row(`INSS Base (${pct(dados.inssPatronalPerc)})`,r.inssBase),row('INSS Férias',r.inssFerias),row('INSS 13º',r.inss13),row('INSS Patronal Total',r.inssPatronal,'emphasis'),row('Provisão Rescisão (40% FGTS)',r.provisaoRescisao),row('Total Encargos',r.encargosTotais,'total')
   ].join('');
   document.getElementById('custosResultados').innerHTML=[row('Custos Fixos Individuais',r.custosInd),row('Custo Fixo/Func',r.custoOperFunc),row('Seguro de Vida/Func',r.seguroFunc),row('Treinamentos NR/Mês',r.treinamentoMes),row('Prêmio Assiduidade',dados.premioAssiduidade)].join('');
-  document.getElementById('resultadoFinal').innerHTML=[row('Custo Total Mensal',r.custoTotal,'emphasis'),row('Custo por HH',r.custoHora),row('Preço Base p/ Faturar',r.precoBase,'total'),`<div class="offer-box"><div class="result-row"><span>Preço p/ Oferecer (+${pct(dados.descontoNegociacaoPerc)})</span><strong>${brl(r.precoOferta)}</strong></div></div>`].join('');
+  document.getElementById('resultadoFinal').innerHTML=[row('Custo Total Mensal',r.custoTotal,'emphasis'),row('Custo por HH',r.custoHora),row('Preço Base p/ Faturar',r.precoBase,'total'),row('Margem efetiva s/ NF base',pct(r.margemVenda)),`<div class="offer-box"><div class="result-row"><span>Preço p/ Oferecer (permite ${pct(dados.descontoNegociacaoPerc)} de desconto)</span><strong>${brl(r.precoOferta)}</strong></div></div>`].join('');
   document.getElementById('jornadaLabel').textContent=dados.jornada;
-  document.getElementById('composicaoHora').innerHTML=[['Custo real / HH',r.custoHora],['Preço base / HH',r.valorHoraBase],['Negociação / HH',r.valorHoraOferta-r.valorHoraBase],['DAS econômico / HH',r.dasEconomico/dados.jornada],['Financeiro / HH',r.custoAntecipacao/dados.jornada],['Resultado / HH',r.resultadoEconomico/dados.jornada]].map(([l,v])=>`<div class="hour-item"><span>${l}</span><strong>${brl(v)}</strong></div>`).join('');
+  document.getElementById('composicaoHora').innerHTML=[['Custo real / HH',r.custoHora],['Preço base / HH',r.valorHoraBase],['Negociação / HH',r.valorHoraOferta-r.valorHoraBase],['Carga Simples / HH',r.cargaSimplesTotal/dados.jornada],['Financeiro / HH',r.custoAntecipacao/dados.jornada],['Resultado / HH',r.resultadoEconomico/dados.jornada]].map(([l,v])=>`<div class="hour-item"><span>${l}</span><strong>${brl(v)}</strong></div>`).join('');
   document.getElementById('valorHoraOferta').textContent=brl(r.valorHoraOferta);
   document.getElementById('valorHoraBaseInfo').textContent=`Base sem negociação: ${brl(r.valorHoraBase)}`;
-  document.getElementById('provaReal').innerHTML=[['NF base',r.precoBase,''],['ISS retido',r.issRetido,'warn'],['INSS retido',r.inssRetido,'warn'],['Recebível líquido',r.recebivelLiquido,''],['DAS econômico',r.dasEconomico,''],['Custo antecipação',r.custoAntecipacao,''],['Custo total mensal',r.custoTotal,''],[`Resultado econômico (${pct(r.resultadoPerc)})`,r.resultadoEconomico,'good']].map(([l,v,c])=>`<div class="proof-item ${c}"><span>${l}</span><strong>${brl(v)}</strong></div>`).join('');
+  document.getElementById('provaReal').innerHTML=[['NF base',r.precoBase,''],['ISS retido (parte do Simples)',r.issRetido,'warn'],['INSS retido (compensável)',r.inssRetido,'warn'],['Recebido do cliente',r.recebivelLiquido,''],['DAS a recolher (sem ISS retido)',r.dasRecolher,''],['Carga Simples total',r.cargaSimplesTotal,''],['Custo antecipação',r.custoAntecipacao,''],[`Resultado econômico (${pct(r.resultadoPerc)} s/ custo)`,r.resultadoEconomico,'good']].map(([l,v,c])=>`<div class="proof-item ${c}"><span>${l}</span><strong>${brl(v)}</strong></div>`).join('');
   renderCargoButtons();renderTabela();renderCustos();
 }
 
