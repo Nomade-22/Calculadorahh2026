@@ -1,0 +1,21 @@
+name: Auditoria de Cálculos
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auditar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar fórmulas da Calculadora HH
+        run: node tests/auditoria-calculos.mjs
